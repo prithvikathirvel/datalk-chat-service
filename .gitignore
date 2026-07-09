@@ -10,3 +10,5 @@ test_*.py
 *.pyo
 *.pyd
 *.pyc
+API_REFERENCE.md
+optimization_report.md
