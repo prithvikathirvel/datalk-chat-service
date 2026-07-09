@@ -12,3 +12,4 @@ test_*.py
 *.pyc
 API_REFERENCE.md
 optimization_report.md
+uv.lock

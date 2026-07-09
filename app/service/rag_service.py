@@ -33,13 +33,13 @@ async def fetch_document_url_from_s3(document_ids: List[str], user_id: str) -> L
     try:
         s3_client = boto3.client(
             "s3",
-            # region_name=config.AWS_REGION,
-            aws_access_key_id=config.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=config.AWS_SECRET_ACCESS_KEY,
+            # region_name=config.REGION,
+            aws_access_key_id=config.ACCESS_KEY_ID,
+            aws_secret_access_key=config.SECRET_ACCESS_KEY,
         )
         urls = []
         for doc_id in document_ids:
-            key = f"{config.AWS_S3_SOURCE_PATH.rstrip('/')}/{user_id}/{doc_id}"
+            key = f"{config.S3_SOURCE_PATH.rstrip('/')}/{user_id}/{doc_id}"
             url = s3_client.generate_presigned_url(
                 "get_object",
                 Params={"Bucket": config.S3_BUCKET_NAME, "Key": key},

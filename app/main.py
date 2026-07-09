@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
+from mangum import Mangum
 from app.api.v1.api import router
 from app.core.config import config
 from app.core.logging import logger, logging_middleware
@@ -33,3 +34,4 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 logging_middleware(app)
 app.include_router(router,prefix=config.VERSION_PREFIX)
+handler = Mangum(app)

@@ -37,10 +37,10 @@ class Config (BaseSettings):
     RAG_SERVICE: str
     RAG_SERVICE_TOKEN: str
     S3_BUCKET_NAME: str
-    AWS_ACCESS_KEY_ID: str
-    AWS_SECRET_ACCESS_KEY: str
-    AWS_REGION: str = "us-east-1"
-    AWS_S3_SOURCE_PATH: str
+    ACCESS_KEY_ID: str
+    SECRET_ACCESS_KEY: str
+    REGION: str = "us-east-1"
+    S3_SOURCE_PATH: str
     
 
 #@lru_cache
