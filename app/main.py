@@ -1,37 +1,67 @@
-from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from mangum import Mangum
+from fastapi import FastAPI
+from psycopg_pool import AsyncConnectionPool
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
 from app.api.v1.api import router
 from app.core.config import config
 from app.core.logging import logger, logging_middleware
-from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-import asyncpg
 from app.langraph.graph import build_graph
+from langgraph_checkpoint_aws import DynamoDBSaver
 
-
+connection_kwargs = {
+    "autocommit": True,
+    "prepare_threshold": None,
+}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Application Started")
-    try:
-        logger.info("Creating Database Pool")
-        db_pool = await asyncpg.create_pool(dsn=config.POSTGRES_URI,min_size=2,max_size=10)
-        logger.info("Database Pool Created")
 
-    except Exception as e:
-        logger.error(f"Error creating Database pool or setting up sessions: {e}")
-        raise Exception(f"Error creating Database pool: {e}")
-    async with AsyncPostgresSaver.from_conn_string(config.POSTGRES_URI) as checkpointer:
-        await checkpointer.setup()
-        app.state.db_pool = db_pool
+    # pool = AsyncConnectionPool(
+    #     conninfo=config.POSTGRES_URI,
+    #     min_size=1,
+    #     max_size=10,
+    #     kwargs=connection_kwargs,
+    #     open=False,
+    # )
+
+    try:
+        #logger.info("Opening database connection pool")
+        # await pool.open()
+        #logger.info("Database connection pool opened")
+
+        # checkpointer = AsyncPostgresSaver(pool)
+        # await checkpointer.setup()
+
+        checkpointer = DynamoDBSaver(table_name="langgraph-checkpoints",ttl_seconds=86400 * 7, region_name="ap-south-1",s3_offload_config={"bucket_name": "datalk-langgraph-checkpoints"})
+
+        app.state.checkpointer = checkpointer
         app.state.graph = await build_graph(checkpointer)
         logger.info("Graph compiled and checkpointer ready")
+
         yield
 
-    logger.info("Application Shutting Down")
-    
+    except Exception as e:
+        logger.error(f"Error during startup: {e}")
+        raise
 
-app = FastAPI(lifespan=lifespan)
+    finally:
+        # await pool.close()
+        # logger.info("Database connection pool closed")
+        logger.info("Application Shutting Down")
+
+
+# app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    title="Datalk Chat Service",
+    description="Datalk Chat Service API Docs",
+    version="1.0",
+    docs_url='/docs',
+    openapi_url='/openapi.json',
+    redoc_url=None,
+    lifespan=lifespan
+)
 logging_middleware(app)
-app.include_router(router,prefix=config.VERSION_PREFIX)
-handler = Mangum(app)
+app.include_router(router, prefix=config.VERSION_PREFIX)
+# handler = Mangum(app)

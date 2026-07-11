@@ -8,8 +8,8 @@ class Config (BaseSettings):
     VERSION_PREFIX: str 
     VERSION : str 
     ENVIRONMENT: str = "development"
-    HOST: str 
-    PORT: int 
+    DB_HOST: str = "localhost"
+    DB_PORT: int = 5432
     USER_NAME: str
     DATABASE: str
     PASSWORD: str
