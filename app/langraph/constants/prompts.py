@@ -1,3 +1,14 @@
+QUERY_REWRITER_PROMPT = """
+Rewrite the follow-up question as a fully self-contained, standalone question using the conversation history below.
+Output ONLY the rewritten question. No explanation, no preamble, no punctuation changes beyond what is needed.
+
+Conversation History:
+{history}
+
+Follow-up Question: {question}
+
+Standalone Question:"""
+
 RELEVANCE_PROMPT = """
 # ROLE
 You are a routing agent in a Retrieval-Augmented Generation (RAG) system.

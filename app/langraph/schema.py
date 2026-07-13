@@ -4,8 +4,9 @@ from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 
 class AgentState(TypedDict):
-    messages : Annotated[List[BaseMessage],add_messages]
-    relevance: Literal ["relevant","irrelevant"]
+    messages: Annotated[List[BaseMessage], add_messages]
+    standalone_query: str
+    relevance: Literal["relevant", "irrelevant"]
     final_response: str
     source_documents: List[str]
     retrieved_texts: List[str]

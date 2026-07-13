@@ -1,0 +1,62 @@
+# ──────────────────────────────────────────────
+# Variables (fill in before running)
+# ──────────────────────────────────────────────
+# AWS_ACCOUNT_ID = 123456789012
+# REGION         = ap-south-1
+# REPO_NAME      = rag-chat-service
+# IMAGE_TAG      = latest
+# PLATFORM       = linux/amd64          (or linux/arm64 for Graviton)
+
+
+# ──────────────────────────────────────────────
+# 1. Authenticate Docker to ECR (private)
+# ──────────────────────────────────────────────
+
+aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.ap-south-1.amazonaws.com
+
+
+# ──────────────────────────────────────────────
+# 2. Create a buildx builder (first time only)
+# ──────────────────────────────────────────────
+
+docker buildx create --name multiarch-builder --use --bootstrap
+
+
+# ──────────────────────────────────────────────
+# 3. Build & push with buildx (single platform)
+# ──────────────────────────────────────────────
+
+docker buildx build --platform linux/amd64 --provenance=false --sbom=false -t 036230294143.dkr.ecr.ap-south-1.amazonaws.com/rag-ingestion-service:v1 --push .
+
+# ──────────────────────────────────────────────
+# 4. Build & push multi-platform (amd64 + arm64)
+# ──────────────────────────────────────────────
+
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  --tag 123456789012.dkr.ecr.ap-south-1.amazonaws.com/rag-chat-service:latest \
+  --push \
+  .
+
+
+# ──────────────────────────────────────────────
+# 5. Build only (no push) — for local testing
+# ──────────────────────────────────────────────
+
+docker buildx build \
+  --platform linux/amd64 \
+  --tag rag-chat-service:latest \
+  --load \
+  .
+
+
+# ──────────────────────────────────────────────
+# 6. Create ECR repository (first time only)
+# ──────────────────────────────────────────────
+
+aws ecr create-repository \
+  --repository-name rag-chat-service \
+  --region ap-south-1
+
+
+aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 036230294143.dkr.ecr.ap-south-1.amazonaws.com

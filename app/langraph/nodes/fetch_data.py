@@ -9,12 +9,19 @@ async def fetch_data(agent_state: AgentState, config: RunnableConfig):
     logger.info("[fetch_data] Node entered")
     try:
         messages = agent_state["messages"]
-        user_message = get_last_human_message(messages)
         user_id = config["configurable"]["user_id"]
-        logger.info(f"[fetch_data] Fetching relevant chunks for user_id={user_id!r}, query={user_message!r}")
+        standalone_query = agent_state.get("standalone_query") or get_last_human_message(messages)
 
-        results = await fetch_relevant_chunks(user_message)
-        logger.info(f"[fetch_data] Raw results count: {len(results)}")
+        logger.info(f"[fetch_data] Attempt 1 — query={standalone_query!r}, user_id={user_id!r}")
+        results = await fetch_relevant_chunks(standalone_query, top_k=5)
+        logger.info(f"[fetch_data] Attempt 1 raw results: {len(results)}")
+
+        # Retry with broader query (original user message) if first attempt yields nothing
+        if not results:
+            fallback_query = get_last_human_message(messages)
+            logger.info(f"[fetch_data] Attempt 2 (retry) — broader query={fallback_query!r}, top_k=10")
+            results = await fetch_relevant_chunks(fallback_query, top_k=10)
+            logger.info(f"[fetch_data] Attempt 2 raw results: {len(results)}")
 
         retrieved_texts = []
         seen_doc_ids: set = set()
@@ -29,6 +36,10 @@ async def fetch_data(agent_state: AgentState, config: RunnableConfig):
             if doc_id and doc_id not in seen_doc_ids:
                 seen_doc_ids.add(doc_id)
                 document_ids.append(doc_id)
+
+        if not retrieved_texts:
+            logger.info("[fetch_data] No chunks retrieved after both attempts — will fallback to general_chat")
+            return {"retrieved_texts": [], "document_ids": [], "source_documents": []}
 
         logger.info(f"[fetch_data] Fetching S3 URLs for {len(document_ids)} unique document(s)")
         source_documents = await fetch_document_url_from_s3(document_ids, user_id=user_id)

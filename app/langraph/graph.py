@@ -1,6 +1,14 @@
 import uuid
 
-from app.langraph.nodes import decision_router, general_chat, relevance_check, rag_response, fetch_data
+from app.langraph.nodes import (
+    query_rewriter,
+    relevance_check,
+    decision_router,
+    result_router,
+    general_chat,
+    rag_response,
+    fetch_data,
+)
 from langgraph.graph import StateGraph, START, END
 from langchain_core.messages import HumanMessage
 from app.langraph.schema import AgentState
@@ -15,21 +23,26 @@ async def build_graph(checkpointer) -> CompiledStateGraph:
     logger.info("[build_graph] Building LangGraph state graph")
     graph = StateGraph(state_schema=AgentState)
 
-    #graph.add_node("relevance_check", relevance_check)
+    graph.add_node("query_rewriter", query_rewriter)
+    graph.add_node("relevance_check", relevance_check)
     graph.add_node("fetch_data", fetch_data)
     graph.add_node("general_chat", general_chat)
     graph.add_node("rag_response", rag_response)
 
-    #graph.add_edge(START, "relevance_check")
-    #graph.add_conditional_edges(
-    #    "relevance_check",
-    #    decision_router,
-    #    {"fetch_data": "fetch_data", "general_chat": "general_chat"},
-    #)
-    graph.add_edge(START, "fetch_data")
-    graph.add_edge("fetch_data", "rag_response")
-    graph.add_edge("general_chat", END)
+    graph.add_edge(START, "query_rewriter")
+    graph.add_edge("query_rewriter", "relevance_check")
+    graph.add_conditional_edges(
+        "relevance_check",
+        decision_router,
+        {"fetch_data": "fetch_data", "general_chat": "general_chat"},
+    )
+    graph.add_conditional_edges(
+        "fetch_data",
+        result_router,
+        {"rag_response": "rag_response", "general_chat": "general_chat"},
+    )
     graph.add_edge("rag_response", END)
+    graph.add_edge("general_chat", END)
 
     compiled = graph.compile(checkpointer=checkpointer)
     logger.info("[build_graph] Graph compiled successfully")
