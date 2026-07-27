@@ -11,6 +11,7 @@ langgraph-checkpoint-postgres
 langgraph-checkpoint-redis
 psycopg[binary]
 pydantic
+pydantic[email]
 pydantic-settings
 python-dotenv
 python-jose

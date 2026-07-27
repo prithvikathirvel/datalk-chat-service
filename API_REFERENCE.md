@@ -186,3 +186,82 @@ GET /chat/get-conversation?thread_id={thread_id}
 - **Continue conversation**: always pass the `thread_id` from the previous response.
 - Responses are either RAG-based (from indexed documents) or general LLM answers — the routing is transparent to the frontend.
 - The `response_metadata` object in conversation messages may include token usage and finish reason from the LLM provider, useful for debugging.
+
+---
+
+## Embed Widget API (Chatbot Embed Configs & API Keys)
+
+Replaces the previous flat-file `embed-configs.json` approach with real
+Postgres-backed storage (`embed_configs`, `api_keys`, `embed_feedback`
+tables — see `app/sql/migrations/0001_embed_configs.sql`).
+
+There are two families of routes, mounted under `{VERSION_PREFIX}/embed`:
+
+- **Owner-authenticated** routes (same Cognito JWT auth as the rest of the
+  API, via the `x-amzn-request-context` header / `get_current_user`):
+  used by the first-party dashboard to manage chatbots.
+- **Public, API-key-authenticated** routes: used by the embeddable widget
+  running on third-party sites. These never see a Cognito session — they
+  authenticate with a scoped API key instead.
+
+### API Key Format
+
+`dk_live_` + 32 random bytes, base64url-encoded (~51 chars total), e.g.
+`dk_live_aB3xQp7mNwRtYu9vKs2dFe6hCjLnOiPqZ4bGcM8W`.
+
+The raw key is only ever returned **once** — at creation time
+(`POST /embed/configs`) or key rotation time
+(`POST /embed/configs/{bot_id}/rotate-key`). Only its SHA-256 hash and a
+12-char display prefix (e.g. `dk_live_aB3x`) are persisted.
+
+### Owner-authenticated Endpoints
+
+| Method | Route | Description |
+|---|---|---|
+| `POST` | `/embed/configs` | Create a chatbot config. Also generates its first API key. Returns `{ config, api_key: { api_key: "<raw, shown once>", ... } }`. |
+| `GET` | `/embed/configs` | List all configs owned by the authenticated user. |
+| `GET` | `/embed/configs/{bot_id}` | Get a single owned config. |
+| `PUT` | `/embed/configs/{bot_id}` | Partial update. Omitted fields are left unchanged. Does **not** rotate the API key. |
+| `DELETE` | `/embed/configs/{bot_id}` | Delete a config. Cascades to delete its `api_keys` and `embed_feedback` rows. |
+| `POST` | `/embed/configs/{bot_id}/rotate-key` | Revokes the currently active key(s) and issues a new one. Returns the new raw key once. |
+| `GET` | `/embed/feedback` | List feedback across all of the authenticated user's chatbots. |
+
+### Public Endpoints (widget-facing, no Cognito session)
+
+Authenticate with either the `X-Api-Key` header, or `?apiKey=` query param
+(used by `/embed/script`, since a `<script src>` tag can't set headers).
+
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/embed/config` | Fetch the sanitized public config for the widget (no `user_id` or other internal fields). |
+| `POST` | `/embed/chat` | Send a chat message from the widget. Proxies to the same LangGraph pipeline as `/message`, scoped to the chatbot's API key. |
+| `POST` | `/embed/feedback` | Submit widget feedback (`reason` one of `not_helpful`, `needs_human`, `gap_detected`). |
+| `GET` | `/embed/script` | Bootstrap payload (`{ config, endpoints }`) for the embeddable `<script>` loader. |
+
+**Validation performed on every public request** (see
+`app/core/embed_auth.py::validate_api_key`):
+
+1. Read raw key from `X-Api-Key` header (or `?apiKey=`).
+2. Hash with SHA-256 and look up in `api_keys` joined with `embed_configs`.
+3. Reject if the key is inactive / revoked / expired.
+4. Reject if the owning config has `is_active = false`.
+5. Check the request's `Origin` header against `allowed_origins` (empty list
+   = unrestricted, `*` = wildcard).
+6. Update `last_used_at` on the key (best-effort).
+
+Public embed routes get relaxed CORS (see `app/core/embed_cors.py`) so
+browsers on third-party origins can call them directly — actual
+authorization is still enforced by the API key + origin check above, not by
+CORS.
+
+### Migrations
+
+Run once against the configured Postgres database:
+
+```
+python -m scripts.apply_migrations
+```
+
+This applies `app/sql/migrations/0001_embed_configs.sql`, which creates the
+`embed_configs`, `api_keys`, and `embed_feedback` tables (idempotent —
+uses `CREATE TABLE IF NOT EXISTS`).

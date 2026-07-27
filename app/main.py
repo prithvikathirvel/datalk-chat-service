@@ -5,6 +5,7 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 from app.api.v1.api import router
 from app.core.config import config
+from app.core.embed_cors import add_embed_cors
 from app.core.logging import logger, logging_middleware
 from app.langraph.graph import build_graph
 from langgraph_checkpoint_aws import DynamoDBSaver
@@ -74,5 +75,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 logging_middleware(app)
+add_embed_cors(app)
 app.include_router(router, prefix=config.VERSION_PREFIX)
+
 # handler = Mangum(app)

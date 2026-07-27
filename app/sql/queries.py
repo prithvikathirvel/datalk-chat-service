@@ -6,3 +6,134 @@ ADD_CONVERSATION = """
 GET_CONVERSATION_BY_THREAD_ID = """
    SELECT * FROM conversation WHERE thread_id = :thread_id ORDER BY created_at ASC
 """
+
+# ──────────────────────────────────────────────
+# Embed configs
+# ──────────────────────────────────────────────
+
+INSERT_EMBED_CONFIG = """
+    INSERT INTO embed_configs (
+        id, user_id, bot_name, bot_description,
+        welcome_message, fallback_message, suggested_questions,
+        primary_color, chat_background, position, launcher_label,
+        launcher_style, avatar_initials, border_radius_style, widget_shadow,
+        font_family, show_powered_by, allowed_origins, collect_visitor_email,
+        is_active, model
+    )
+    VALUES (
+        :id, :user_id, :bot_name, :bot_description,
+        :welcome_message, :fallback_message, :suggested_questions,
+        :primary_color, :chat_background, :position, :launcher_label,
+        :launcher_style, :avatar_initials, :border_radius_style, :widget_shadow,
+        :font_family, :show_powered_by, :allowed_origins, :collect_visitor_email,
+        :is_active, :model
+    )
+    RETURNING *
+"""
+
+GET_EMBED_CONFIGS_BY_USER = """
+    SELECT * FROM embed_configs WHERE user_id = :user_id ORDER BY created_at DESC
+"""
+
+GET_EMBED_CONFIG_BY_ID = """
+    SELECT * FROM embed_configs WHERE id = :id
+"""
+
+GET_EMBED_CONFIG_BY_ID_FOR_USER = """
+    SELECT * FROM embed_configs WHERE id = :id AND user_id = :user_id
+"""
+
+UPDATE_EMBED_CONFIG = """
+    UPDATE embed_configs
+    SET
+        bot_name = :bot_name,
+        bot_description = :bot_description,
+        welcome_message = :welcome_message,
+        fallback_message = :fallback_message,
+        suggested_questions = :suggested_questions,
+        primary_color = :primary_color,
+        chat_background = :chat_background,
+        position = :position,
+        launcher_label = :launcher_label,
+        launcher_style = :launcher_style,
+        avatar_initials = :avatar_initials,
+        border_radius_style = :border_radius_style,
+        widget_shadow = :widget_shadow,
+        font_family = :font_family,
+        show_powered_by = :show_powered_by,
+        allowed_origins = :allowed_origins,
+        collect_visitor_email = :collect_visitor_email,
+        is_active = :is_active,
+        model = :model,
+        updated_at = NOW()
+    WHERE id = :id AND user_id = :user_id
+    RETURNING *
+"""
+
+DELETE_EMBED_CONFIG = """
+    DELETE FROM embed_configs WHERE id = :id AND user_id = :user_id
+    RETURNING id
+"""
+
+# ──────────────────────────────────────────────
+# API keys
+# ──────────────────────────────────────────────
+
+INSERT_API_KEY = """
+    INSERT INTO api_keys (id, config_id, user_id, key_hash, key_prefix, name, expires_at)
+    VALUES (:id, :config_id, :user_id, :key_hash, :key_prefix, :name, :expires_at)
+    RETURNING *
+"""
+
+GET_ACTIVE_API_KEYS_BY_CONFIG = """
+    SELECT * FROM api_keys
+    WHERE config_id = :config_id AND revoked_at IS NULL
+    ORDER BY created_at DESC
+"""
+
+REVOKE_ACTIVE_API_KEYS_FOR_CONFIG = """
+    UPDATE api_keys
+    SET is_active = FALSE, revoked_at = NOW()
+    WHERE config_id = :config_id AND is_active = TRUE AND revoked_at IS NULL
+    RETURNING id
+"""
+
+GET_CONFIG_AND_KEY_BY_KEY_HASH = """
+    SELECT
+        ak.id AS api_key_id,
+        ak.is_active AS api_key_is_active,
+        ak.expires_at AS api_key_expires_at,
+        ak.revoked_at AS api_key_revoked_at,
+        ec.*
+    FROM api_keys ak
+    JOIN embed_configs ec ON ec.id = ak.config_id
+    WHERE ak.key_hash = :key_hash
+"""
+
+UPDATE_API_KEY_LAST_USED = """
+    UPDATE api_keys SET last_used_at = NOW() WHERE id = :id
+"""
+
+# ──────────────────────────────────────────────
+# Embed feedback
+# ──────────────────────────────────────────────
+
+INSERT_EMBED_FEEDBACK = """
+    INSERT INTO embed_feedback (
+        id, config_id, user_id, thread_id, question, answer,
+        visitor_email, page_url, parent_origin, reason
+    )
+    VALUES (
+        :id, :config_id, :user_id, :thread_id, :question, :answer,
+        :visitor_email, :page_url, :parent_origin, :reason
+    )
+    RETURNING *
+"""
+
+GET_EMBED_FEEDBACK_BY_USER = """
+    SELECT * FROM embed_feedback WHERE user_id = :user_id ORDER BY created_at DESC
+"""
+
+GET_EMBED_FEEDBACK_BY_CONFIG = """
+    SELECT * FROM embed_feedback WHERE config_id = :config_id ORDER BY created_at DESC
+"""
