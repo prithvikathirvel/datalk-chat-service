@@ -90,6 +90,7 @@ class EmbedConfig(EmbedConfigBase):
 
     id: UUID
     user_id: str
+    source_document_ids: List[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -97,7 +98,10 @@ class EmbedConfig(EmbedConfigBase):
 class EmbedConfigPublic(EmbedConfigBase):
     """Sanitized representation returned to the public widget.
 
-    Excludes ``user_id`` and any other internal/owner-only fields.
+    Excludes ``user_id``, ``source_document_ids`` and any other
+    internal/owner-only fields — the widget doesn't need to know which
+    documents back its answers, only the chat/feedback endpoints need that
+    (resolved server-side from ``embed_config_sources``).
     """
 
     id: UUID
@@ -167,3 +171,26 @@ class EmbedChatRequest(BaseModel):
     thread_id: Optional[str] = None
     visitor_email: Optional[EmailStr] = None
     page_url: Optional[str] = None
+
+
+class EmbedConfigSourceIn(BaseModel):
+    """A single document to attach as a RAG source for a chatbot."""
+
+    document_id: str = Field(..., min_length=1)
+    document_filename: str = Field(..., min_length=1)
+
+
+class EmbedConfigSourcesAdd(BaseModel):
+    """Payload for ``POST /embed/configs/{bot_id}/sources``."""
+
+    documents: List[EmbedConfigSourceIn] = Field(..., min_length=1)
+
+
+class EmbedConfigSource(BaseModel):
+    """DB representation of an assigned source document."""
+
+    config_id: UUID
+    document_id: str
+    document_filename: str
+    added_at: datetime
+

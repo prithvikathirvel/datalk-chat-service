@@ -9,6 +9,11 @@ This mirrors the "Embed API Key Management & Full Backend Storage" plan:
     its configuration, send chat messages (proxied through the existing
     LangGraph pipeline) and submit feedback — without ever exposing a
     Cognito session to third-party sites.
+  * Owner-authenticated "sources" endpoints let a chatbot be scoped to a
+    subset of the user's ingested documents (``embed_config_sources``,
+    Phase 5 — RAG scoping). An empty source list means "search all of the
+    user's documents"; a non-empty list restricts retrieval to those
+    document IDs, enforced in ``app.langraph.nodes.fetch_data``.
 
 Routes are mounted under ``{VERSION_PREFIX}/embed`` (see ``app/api/v1/api.py``).
 """
@@ -36,15 +41,19 @@ from app.schema.embed import (
     EmbedConfigCreate,
     EmbedConfigCreateResponse,
     EmbedConfigPublic,
+    EmbedConfigSource,
+    EmbedConfigSourcesAdd,
     EmbedConfigUpdate,
     EmbedFeedbackCreate,
     EmbedFeedbackOut,
 )
 from app.sql.queries import (
+    DELETE_ALL_EMBED_CONFIG_SOURCES,
     DELETE_EMBED_CONFIG,
-    GET_ACTIVE_API_KEYS_BY_CONFIG,
-    GET_EMBED_CONFIG_BY_ID,
+    DELETE_EMBED_CONFIG_SOURCE,
     GET_EMBED_CONFIG_BY_ID_FOR_USER,
+    GET_EMBED_CONFIG_SOURCE_IDS,
+    GET_EMBED_CONFIG_SOURCES,
     GET_EMBED_CONFIGS_BY_USER,
     GET_EMBED_FEEDBACK_BY_USER,
     INSERT_API_KEY,
@@ -52,6 +61,7 @@ from app.sql.queries import (
     INSERT_EMBED_FEEDBACK,
     REVOKE_ACTIVE_API_KEYS_FOR_CONFIG,
     UPDATE_EMBED_CONFIG,
+    UPSERT_EMBED_CONFIG_SOURCE,
 )
 
 embed_router = APIRouter(prefix="/embed", tags=["embed"])
@@ -69,6 +79,17 @@ async def _get_owned_config_or_404(db, bot_id: str, user_id: str) -> dict:
     if not rows:
         raise HTTPException(status_code=404, detail="Embed config not found")
     return rows[0]
+
+
+async def _get_source_document_ids(db, config_id: str) -> list[str]:
+    rows = await db.execute_async_query(GET_EMBED_CONFIG_SOURCE_IDS, {"config_id": config_id})
+    return [row["document_id"] for row in rows]
+
+
+async def _to_embed_config(db, row: dict) -> EmbedConfig:
+    """Hydrate a raw ``embed_configs`` row with its scoped source document IDs."""
+    source_document_ids = await _get_source_document_ids(db, row["id"])
+    return EmbedConfig(**row, source_document_ids=source_document_ids)
 
 
 async def _create_api_key_for_config(db, config_id: str, user_id: str, name: str = "Default") -> ApiKeyCreated:
@@ -124,7 +145,7 @@ async def create_embed_config(
 
         api_key = await _create_api_key_for_config(db, config_id, user.sub)
 
-        return EmbedConfigCreateResponse(config=EmbedConfig(**config_row), api_key=api_key)
+        return EmbedConfigCreateResponse(config=await _to_embed_config(db, config_row), api_key=api_key)
     except Exception as e:
         logger.error(f"[create_embed_config] Error: {e}")
         raise HTTPException(status_code=500, detail=f"Error creating embed config: {e}")
@@ -138,7 +159,7 @@ async def create_embed_config(
 async def list_embed_configs(db=Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     try:
         rows = await db.execute_async_query(GET_EMBED_CONFIGS_BY_USER, {"user_id": user.sub})
-        return [EmbedConfig(**row) for row in rows]
+        return [await _to_embed_config(db, row) for row in rows]
     except Exception as e:
         logger.error(f"[list_embed_configs] Error: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching embed configs: {e}")
@@ -151,7 +172,7 @@ async def list_embed_configs(db=Depends(get_db), user: CurrentUser = Depends(get
 )
 async def get_embed_config(bot_id: str, db=Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     row = await _get_owned_config_or_404(db, bot_id, user.sub)
-    return EmbedConfig(**row)
+    return await _to_embed_config(db, row)
 
 
 @embed_router.put(
@@ -177,7 +198,7 @@ async def update_embed_config(
         rows = await db.execute_async_query(UPDATE_EMBED_CONFIG, merged)
         if not rows:
             raise HTTPException(status_code=404, detail="Embed config not found")
-        return EmbedConfig(**rows[0])
+        return await _to_embed_config(db, rows[0])
     except HTTPException:
         raise
     except Exception as e:
@@ -188,7 +209,7 @@ async def update_embed_config(
 @embed_router.delete(
     "/configs/{bot_id}",
     summary="Delete a chatbot embed configuration",
-    description="Cascades to delete all associated api_keys and embed_feedback rows.",
+    description="Cascades to delete all associated api_keys, embed_feedback and embed_config_sources rows.",
 )
 async def delete_embed_config(bot_id: str, db=Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     try:
@@ -234,6 +255,98 @@ async def list_embed_feedback(db=Depends(get_db), user: CurrentUser = Depends(ge
 
 
 # ──────────────────────────────────────────────
+# Owner-authenticated: per-chatbot document sources (RAG scoping)
+# ──────────────────────────────────────────────
+
+
+@embed_router.get(
+    "/configs/{bot_id}/sources",
+    response_model=list[EmbedConfigSource],
+    summary="List documents assigned as RAG sources for a chatbot",
+    description="Empty result means the chatbot searches the user's entire document library (no restriction).",
+)
+async def list_embed_config_sources(bot_id: str, db=Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    await _get_owned_config_or_404(db, bot_id, user.sub)
+    try:
+        rows = await db.execute_async_query(GET_EMBED_CONFIG_SOURCES, {"config_id": bot_id})
+        return [EmbedConfigSource(**row) for row in rows]
+    except Exception as e:
+        logger.error(f"[list_embed_config_sources] Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching sources: {e}")
+
+
+@embed_router.post(
+    "/configs/{bot_id}/sources",
+    response_model=list[EmbedConfigSource],
+    summary="Assign one or more documents as RAG sources for a chatbot",
+    description="Upserts each document — safe to call repeatedly. Does not remove documents omitted from the payload; use DELETE to remove.",
+)
+async def add_embed_config_sources(
+    bot_id: str,
+    payload: EmbedConfigSourcesAdd,
+    db=Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    await _get_owned_config_or_404(db, bot_id, user.sub)
+    try:
+        results = []
+        for doc in payload.documents:
+            rows = await db.execute_async_query(
+                UPSERT_EMBED_CONFIG_SOURCE,
+                {
+                    "config_id": bot_id,
+                    "document_id": doc.document_id,
+                    "document_filename": doc.document_filename,
+                },
+            )
+            results.append(EmbedConfigSource(**rows[0]))
+        return results
+    except Exception as e:
+        logger.error(f"[add_embed_config_sources] Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error adding sources: {e}")
+
+
+@embed_router.delete(
+    "/configs/{bot_id}/sources/{document_id}",
+    summary="Remove a single document source from a chatbot",
+)
+async def delete_embed_config_source(
+    bot_id: str,
+    document_id: str,
+    db=Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    await _get_owned_config_or_404(db, bot_id, user.sub)
+    try:
+        rows = await db.execute_async_query(
+            DELETE_EMBED_CONFIG_SOURCE, {"config_id": bot_id, "document_id": document_id}
+        )
+        if not rows:
+            raise HTTPException(status_code=404, detail="Source document not found for this chatbot")
+        return {"success": True, "document_id": document_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[delete_embed_config_source] Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error removing source: {e}")
+
+
+@embed_router.delete(
+    "/configs/{bot_id}/sources",
+    summary="Clear all document sources for a chatbot",
+    description="Reverts the chatbot to 'all documents' mode (no RAG restriction).",
+)
+async def clear_embed_config_sources(bot_id: str, db=Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    await _get_owned_config_or_404(db, bot_id, user.sub)
+    try:
+        rows = await db.execute_async_query(DELETE_ALL_EMBED_CONFIG_SOURCES, {"config_id": bot_id})
+        return {"success": True, "removed": len(rows)}
+    except Exception as e:
+        logger.error(f"[clear_embed_config_sources] Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error clearing sources: {e}")
+
+
+# ──────────────────────────────────────────────
 # Public, API-key-authenticated: widget-facing endpoints
 # ──────────────────────────────────────────────
 
@@ -251,7 +364,12 @@ async def get_public_embed_config(auth: ValidatedEmbedAuth = Depends(validate_ap
 @embed_router.post(
     "/chat",
     summary="[Public] Chat with a chatbot from the embedded widget",
-    description="Authenticated via `X-Api-Key` header. Proxies to the same LangGraph pipeline used by the authenticated `/message` endpoint, scoped to the chatbot owner's documents.",
+    description=(
+        "Authenticated via `X-Api-Key` header. Proxies to the same LangGraph pipeline used by the "
+        "authenticated `/message` endpoint. If the chatbot has document sources assigned "
+        "(`embed_config_sources`), retrieval is restricted to those documents; otherwise the full "
+        "document library owned by the chatbot's creator is searched."
+    ),
 )
 async def embed_chat(
     request: Request,
@@ -263,19 +381,22 @@ async def embed_chat(
     start = time.perf_counter()
     try:
         config = auth.config
+        source_document_ids = await _get_source_document_ids(db, config["id"])
+
         query = ChatRequest(
             message=payload.message,
             model=config.get("model"),
             thread_id=payload.thread_id,
             user_id=auth.user_id,
             auth_header=None,
+            source_document_ids=source_document_ids or None,
         )
         result = await execute_graph(query, graph)
 
         response_time_ms = round((time.perf_counter() - start) * 1000, 2)
         logger.info(
             f"[embed_chat] config_id={config.get('id')!r} thread_id={result.get('thread_id')!r} "
-            f"response_time_ms={response_time_ms}"
+            f"source_document_ids={source_document_ids!r} response_time_ms={response_time_ms}"
         )
 
         return {

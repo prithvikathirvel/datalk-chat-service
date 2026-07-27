@@ -55,10 +55,20 @@ async def execute_graph(query: ChatRequest, graph: CompiledStateGraph):
     llm = LLMService(model_name=model_name)
     user_id = query.user_id
     auth_header = query.auth_header
+    source_document_ids = query.source_document_ids or None
 
-    logger.info(f"[execute_graph] thread_id={thread_id!r}, model={model_name!r}, user_id={user_id!r}")
+    logger.info(f"[execute_graph] thread_id={thread_id!r}, model={model_name!r}, user_id={user_id!r}, source_document_ids={source_document_ids!r}")
 
-    graph_config = {"configurable": {"thread_id": thread_id, "llm": llm, "user_id": user_id, "auth_header": auth_header}}
+    graph_config = {
+        "configurable": {
+            "thread_id": thread_id,
+            "llm": llm,
+            "user_id": user_id,
+            "auth_header": auth_header,
+            "source_document_ids": source_document_ids,
+        }
+    }
+
     initial_state = {
         "messages": [HumanMessage(content=query.message)],
     }

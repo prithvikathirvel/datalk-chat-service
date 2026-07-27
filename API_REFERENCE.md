@@ -254,6 +254,50 @@ browsers on third-party origins can call them directly — actual
 authorization is still enforced by the API key + origin check above, not by
 CORS.
 
+### Per-Chatbot Document Sources (RAG Scoping)
+
+By default a chatbot's widget searches the *entire* document library owned
+by the user who created it. You can optionally restrict a chatbot to a
+specific subset of documents via the `embed_config_sources` junction table
+(`app/sql/migrations/0002_embed_config_sources.sql`).
+
+**Rule**: if a config has zero rows in `embed_config_sources` → unrestricted
+(searches all documents). If it has one or more rows → RAG retrieval is
+restricted to only those `document_id` values.
+
+| Method | Route | Auth | Description |
+|---|---|---|---|
+| `GET` | `/embed/configs/{bot_id}/sources` | Session | List documents assigned to this chatbot. |
+| `POST` | `/embed/configs/{bot_id}/sources` | Session | Upsert one or more `{ document_id, document_filename }` entries. Body: `{ "documents": [...] }`. |
+| `DELETE` | `/embed/configs/{bot_id}/sources/{document_id}` | Session | Remove a single source document. |
+| `DELETE` | `/embed/configs/{bot_id}/sources` | Session | Clear all sources — reverts the chatbot to "all documents" mode. |
+
+`GET /embed/configs` and `GET /embed/configs/{bot_id}` now also return a
+`source_document_ids: string[]` field (empty = unrestricted). This field is
+intentionally **omitted** from `EmbedConfigPublic` — the public widget
+doesn't need to know which documents back its answers.
+
+**How the restriction is enforced end-to-end:**
+
+1. `POST /embed/chat` resolves the calling API key to its `config_id`, then
+   looks up `embed_config_sources` for that config
+   (`app/api/v1/embed.py::_get_source_document_ids`).
+2. If sources exist, they're passed as `ChatRequest.source_document_ids`
+   into the LangGraph pipeline (`app/langraph/graph.py::execute_graph`,
+   propagated via `graph_config["configurable"]`).
+3. `app/langraph/nodes/fetch_data.py` forwards `source_document_ids` to
+   `app/service/rag_service.py::fetch_relevant_chunks`, which requests
+   pre-retrieval filtering from the RAG service (`document_ids` query
+   param — adjust the param name once the RAG service's actual filter
+   contract is confirmed).
+4. As defense-in-depth, `fetch_data` *also* discards any returned chunk
+   whose `document_id` isn't in the allowed set, so a chatbot scoped to
+   specific documents can never leak content from documents outside that
+   scope even if the RAG service doesn't yet support the filter.
+5. The authenticated `/message` endpoint is unaffected — it never sets
+   `source_document_ids`, so it continues to search the full corpus exactly
+   as before.
+
 ### Migrations
 
 Run once against the configured Postgres database:
@@ -262,6 +306,11 @@ Run once against the configured Postgres database:
 python -m scripts.apply_migrations
 ```
 
-This applies `app/sql/migrations/0001_embed_configs.sql`, which creates the
-`embed_configs`, `api_keys`, and `embed_feedback` tables (idempotent —
-uses `CREATE TABLE IF NOT EXISTS`).
+This applies, in order:
+- `app/sql/migrations/0001_embed_configs.sql` — creates `embed_configs`,
+  `api_keys`, and `embed_feedback`.
+- `app/sql/migrations/0002_embed_config_sources.sql` — creates
+  `embed_config_sources` for per-chatbot RAG scoping.
+
+Both are idempotent (`CREATE TABLE IF NOT EXISTS`).
+

@@ -137,3 +137,34 @@ GET_EMBED_FEEDBACK_BY_USER = """
 GET_EMBED_FEEDBACK_BY_CONFIG = """
     SELECT * FROM embed_feedback WHERE config_id = :config_id ORDER BY created_at DESC
 """
+
+# ──────────────────────────────────────────────
+# Embed config sources (per-chatbot RAG scoping — Phase 5)
+# ──────────────────────────────────────────────
+
+UPSERT_EMBED_CONFIG_SOURCE = """
+    INSERT INTO embed_config_sources (config_id, document_id, document_filename)
+    VALUES (:config_id, :document_id, :document_filename)
+    ON CONFLICT (config_id, document_id)
+    DO UPDATE SET document_filename = EXCLUDED.document_filename
+    RETURNING *
+"""
+
+GET_EMBED_CONFIG_SOURCES = """
+    SELECT * FROM embed_config_sources WHERE config_id = :config_id ORDER BY added_at DESC
+"""
+
+GET_EMBED_CONFIG_SOURCE_IDS = """
+    SELECT document_id FROM embed_config_sources WHERE config_id = :config_id
+"""
+
+DELETE_EMBED_CONFIG_SOURCE = """
+    DELETE FROM embed_config_sources
+    WHERE config_id = :config_id AND document_id = :document_id
+    RETURNING document_id
+"""
+
+DELETE_ALL_EMBED_CONFIG_SOURCES = """
+    DELETE FROM embed_config_sources WHERE config_id = :config_id
+    RETURNING document_id
+"""

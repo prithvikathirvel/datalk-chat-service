@@ -13,29 +13,48 @@ async def fetch_data(agent_state: AgentState, config: RunnableConfig):
         messages = agent_state["messages"]
         user_id = config["configurable"]["user_id"]
         auth_header = config["configurable"]["auth_header"]
+        source_document_ids = config["configurable"].get("source_document_ids")
         standalone_query = agent_state.get("standalone_query") or get_last_human_message(messages)
 
-        logger.info(f"[fetch_data] Attempt 1 — query={standalone_query!r}, user_id={user_id!r}")
+        logger.info(
+            f"[fetch_data] Attempt 1 — query={standalone_query!r}, user_id={user_id!r}, "
+            f"source_document_ids={source_document_ids!r}"
+        )
         _t0 = time.perf_counter()
-        results = await fetch_relevant_chunks(standalone_query, top_k=5, auth_header=auth_header)
+        results = await fetch_relevant_chunks(
+            standalone_query, top_k=5, auth_header=auth_header, source_document_ids=source_document_ids
+        )
         logger.info(f"[fetch_data] Attempt 1 raw results: {len(results)}")
 
         # Retry with broader query (original user message) if first attempt yields nothing
         if not results:
             fallback_query = get_last_human_message(messages)
             logger.info(f"[fetch_data] Attempt 2 (retry) — broader query={fallback_query!r}, top_k=10")
-            results = await fetch_relevant_chunks(fallback_query, top_k=10, auth_header=auth_header)
+            results = await fetch_relevant_chunks(
+                fallback_query, top_k=10, auth_header=auth_header, source_document_ids=source_document_ids
+            )
             logger.info(f"[fetch_data] Attempt 2 raw results: {len(results)}")
         retrieval_response_time_ms = round((time.perf_counter() - _t0) * 1000, 2)
+
 
         retrieved_texts = []
         seen_doc_ids: set = set()
         document_ids = []
+        allowed_doc_ids = set(source_document_ids) if source_document_ids else None
 
         for res in results:
             meta = res.get("metadata", {})
             text = meta.get("text", "")
             doc_id = meta.get("document_id", "")
+
+            # Defense in depth: even though `source_document_ids` is sent to
+            # the RAG service for pre-retrieval filtering, also enforce the
+            # restriction here in case the RAG service doesn't (yet) honor
+            # the filter — a chatbot scoped to specific documents must never
+            # leak chunks from documents outside that scope.
+            if allowed_doc_ids is not None and doc_id not in allowed_doc_ids:
+                continue
+
             if text:
                 retrieved_texts.append(text)
             if doc_id and doc_id not in seen_doc_ids:

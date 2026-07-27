@@ -19,8 +19,21 @@ _s3_client = boto3.client(
 )
 
 
-async def fetch_relevant_chunks(query: str, top_k: int = 5, auth_header: str = None) -> List[dict]:
-    """Fetches the most relevant chunks from the RAG service based on the provided query."""
+async def fetch_relevant_chunks(
+    query: str,
+    top_k: int = 5,
+    auth_header: str = None,
+    source_document_ids: List[str] = None,
+) -> List[dict]:
+    """Fetches the most relevant chunks from the RAG service based on the provided query.
+
+    When `source_document_ids` is provided (non-empty), the RAG service is
+    asked to restrict retrieval to those document IDs — used to scope an
+    embed widget's chatbot to a specific set of documents (see
+    `embed_config_sources`). Filtering is requested at the vector-search
+    layer (pre-retrieval) for efficiency; `fetch_data` additionally
+    re-filters the returned chunks as a safety net.
+    """
     try:
         #token = config.RAG_SERVICE_TOKEN
         headers = {"accept": "application/json"}
@@ -28,9 +41,16 @@ async def fetch_relevant_chunks(query: str, top_k: int = 5, auth_header: str = N
         #     headers["Authorization"] = f"Bearer {token}"
         if auth_header:
             headers["Authorization"] = auth_header
+
+        params = {"query": query, "top_k": top_k}
+        if source_document_ids:
+            # Sent as a comma-separated list; adjust to match the RAG
+            # service's actual filter parameter contract once confirmed.
+            params["document_ids"] = ",".join(source_document_ids)
+
         response = await _http_client.get(
             config.RAG_SERVICE,
-            params={"query": query, "top_k": top_k},
+            params=params,
             headers=headers,
         )
         response.raise_for_status()
@@ -41,6 +61,7 @@ async def fetch_relevant_chunks(query: str, top_k: int = 5, auth_header: str = N
     except httpx.HTTPStatusError as e:
         logger.error(f"RAG service returned an error: {e.response.status_code} - {e.response.text}")
         return []
+
 
 
 async def fetch_document_url_from_s3(document_ids: List[str], user_id: str) -> List[str]:

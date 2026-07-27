@@ -7,7 +7,14 @@ class ChatRequest(BaseModel):
     model: Optional[str] = None
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
-    auth_header: Optional[str] = None 
+    auth_header: Optional[str] = None
+    source_document_ids: Optional[List[str]] = None
+    """Restricts RAG retrieval to these document IDs when provided (non-empty).
+    None/empty = no restriction, search the user's full document corpus.
+    Populated server-side for embed widget chats scoped via
+    `embed_config_sources` — never trust a client-supplied value here for
+    the authenticated `/message` endpoint."""
+
     @field_validator('message')
     @classmethod
     def validate(cls, value):
@@ -16,6 +23,7 @@ class ChatRequest(BaseModel):
         if "\0" in value:
             raise ValueError("Content contains null bytes")
         return value
+
     
 
     
