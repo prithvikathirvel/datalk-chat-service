@@ -25,11 +25,10 @@ class LLMService:
         if not self.llm:
             raise ValueError(f"Model {model_name} not found in registry.")
 
-    def get_llm(self, structured: bool = True, output_schema=None):
+    def get_llm(self, structured: bool = True, output_schema=None, include_raw: bool = False):
         if structured:
-            return self.llm.with_structured_output(output_schema)
-        else:
-            return self.llm
+            return self.llm.with_structured_output(output_schema, include_raw=include_raw)
+        return self.llm
 
     @retry(
         stop=stop_after_attempt(3),

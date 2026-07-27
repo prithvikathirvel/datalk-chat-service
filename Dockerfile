@@ -16,6 +16,7 @@ COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:1.0.1 /lambda-adapter /opt
 ENV AWS_LWA_PORT=8080
 ENV PORT=8080
 ENV AWS_LWA_READINESS_CHECK_PATH=/
+ENV AWS_LWA_REMOVE_BASE_PATH=/chat
 
 # Start FastAPI HTTP server (no Mangum handler needed)
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]

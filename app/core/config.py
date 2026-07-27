@@ -1,3 +1,4 @@
+from psycopg import postgres
 from pydantic_settings import BaseSettings,SettingsConfigDict
 import os
 from functools import lru_cache
@@ -8,11 +9,6 @@ class Config (BaseSettings):
     VERSION_PREFIX: str 
     VERSION : str 
     ENVIRONMENT: str = "development"
-    DB_HOST: str = "localhost"
-    DB_PORT: int = 5432
-    USER_NAME: str
-    DATABASE: str
-    PASSWORD: str
     SECRET_KEY: str 
     ALGORITHM : str 
     LLAMA_MODEL_NAME: str
@@ -23,11 +19,9 @@ class Config (BaseSettings):
     MAX_RETRY_ATTEMPTS: int
     RETRY_DELAYS: int
     DEFAULT_TEMPERATURE : float
-    DIALECT: str
     DEFAULT_LLM_MODEL:str
     CHECKPOINTER_TYPE: str
     REDIS_URI: str
-    POSTGRES_URI: str
     LANGSMITH_TRACING: str
     LANGSMITH_ENDPOINT: str
     LANGSMITH_API_KEY: str
@@ -39,8 +33,15 @@ class Config (BaseSettings):
     S3_BUCKET_NAME: str
     ACCESS_KEY_ID: str
     SECRET_ACCESS_KEY: str
-    REGION: str = "us-east-1"
+    REGION: str = "ap-south-1"
     S3_SOURCE_PATH: str
+    DATABASE_HOST: str 
+    DATABASE_PORT: int 
+    DATABASE_NAME: str
+    DATABASE_USER: str
+    DATABASE_PASSWORD: str 
+    DIALECT: str
+    POSTGRES_URI: str = None
     
 
 #@lru_cache

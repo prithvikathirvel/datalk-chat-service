@@ -7,3 +7,9 @@ def get_graph(request: Request) -> CompiledStateGraph:
     if state is None:
         raise RuntimeError("Graph not initialized — app may still be starting")
     return state
+
+def get_db(request: Request) -> asyncpg.Connection:
+    db = getattr(request.app.state, "database", None)
+    if db is None:
+        raise RuntimeError("Database not initialized — app may still be starting")
+    return db

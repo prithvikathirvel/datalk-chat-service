@@ -13,19 +13,21 @@ _http_client: httpx.AsyncClient = httpx.AsyncClient(timeout=10.0)
 # Singleton boto3 S3 client — created once at module load
 _s3_client = boto3.client(
     "s3",
-    aws_access_key_id=config.ACCESS_KEY_ID,
-    aws_secret_access_key=config.SECRET_ACCESS_KEY,
     region_name=config.REGION,
+    endpoint_url=f"https://s3.{config.REGION}.amazonaws.com",
+    config=boto3.session.Config(signature_version="s3v4"),
 )
 
 
-async def fetch_relevant_chunks(query: str, top_k: int = 5) -> List[dict]:
+async def fetch_relevant_chunks(query: str, top_k: int = 5, auth_header: str = None) -> List[dict]:
     """Fetches the most relevant chunks from the RAG service based on the provided query."""
     try:
-        token = config.RAG_SERVICE_TOKEN
+        #token = config.RAG_SERVICE_TOKEN
         headers = {"accept": "application/json"}
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
+        # if token:
+        #     headers["Authorization"] = f"Bearer {token}"
+        if auth_header:
+            headers["Authorization"] = auth_header
         response = await _http_client.get(
             config.RAG_SERVICE,
             params={"query": query, "top_k": top_k},

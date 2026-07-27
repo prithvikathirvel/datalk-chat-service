@@ -16,9 +16,9 @@ llm_models : List[Dict] = [
         "provider":"meta"
     },
     {
-        "name": "openai/gpt-oss-120b",
+        "name": "llama-3.1-8b-instant",
         "llm" : ChatGroq(
-            model="openai/gpt-oss-120b",
+            model="llama-3.1-8b-instant",
             api_key=settings.GROQ_API_KEY,
             temperature = settings.DEFAULT_TEMPERATURE,
             timeout=60,

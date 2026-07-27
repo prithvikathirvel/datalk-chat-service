@@ -2,7 +2,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from app.langraph.schema import AgentState
 from app.langraph.constants.prompts import QUERY_REWRITER_PROMPT
-from app.langraph.utils.helper import get_last_human_message
+from app.langraph.utils.helper import get_last_human_message, extract_token_usage
 from app.core.logging import logger
 
 
@@ -40,7 +40,7 @@ async def query_rewriter(agent_state: AgentState, config: RunnableConfig) -> Age
         standalone_query = response.content.strip()
 
         logger.info(f"[query_rewriter] Standalone query: {standalone_query!r}")
-        return {"standalone_query": standalone_query}
+        return {"standalone_query": standalone_query, "token_usage": extract_token_usage(response)}
     except Exception as e:
         logger.error(f"[query_rewriter] Error: {e} — falling back to raw user message")
         return {"standalone_query": get_last_human_message(agent_state["messages"])}

@@ -3,7 +3,7 @@ from app.core.logging import logger
 from app.langraph.schema import AgentState
 from langchain_core.messages import SystemMessage, AIMessage
 from app.langraph.constants.prompts import RAG_RESPONSE_PROMPT
-from app.langraph.utils.helper import trim_messages
+from app.langraph.utils.helper import trim_messages, extract_token_usage
 
 
 async def rag_response(agent_state: AgentState, config: RunnableConfig):
@@ -33,6 +33,7 @@ async def rag_response(agent_state: AgentState, config: RunnableConfig):
             "messages": [AIMessage(content=response.content)],
             "final_response": response.content,
             "source_documents": source_documents,
+            "token_usage": extract_token_usage(response),
         }
     except Exception as e:
         logger.error(f"[rag_response] Error: {e}")

@@ -54,15 +54,27 @@ async def execute_graph(query: ChatRequest, graph: CompiledStateGraph):
     model_name = query.model or config.DEFAULT_LLM_MODEL
     llm = LLMService(model_name=model_name)
     user_id = query.user_id
+    auth_header = query.auth_header
 
     logger.info(f"[execute_graph] thread_id={thread_id!r}, model={model_name!r}, user_id={user_id!r}")
 
-    graph_config = {"configurable": {"thread_id": thread_id, "llm": llm, "user_id": user_id}}
+    graph_config = {"configurable": {"thread_id": thread_id, "llm": llm, "user_id": user_id, "auth_header": auth_header}}
     initial_state = {
         "messages": [HumanMessage(content=query.message)],
     }
+    empty_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    prior_state = await graph.aget_state(graph_config)
+    prior_usage = (prior_state.values.get("token_usage") if prior_state.values else None) or empty_usage
 
     logger.info(f"[execute_graph] Invoking graph with query: {query.message!r}")
     result = await graph.ainvoke(initial_state, config=graph_config)
     logger.info(f"[execute_graph] Graph completed. final_response length: {len(result.get('final_response', ''))} chars")
-    return {**result, "thread_id": thread_id}
+
+    cumulative = result.get("token_usage") or empty_usage
+    token_usage = {
+        "prompt_tokens": cumulative["prompt_tokens"] - prior_usage["prompt_tokens"],
+        "completion_tokens": cumulative["completion_tokens"] - prior_usage["completion_tokens"],
+        "total_tokens": cumulative["total_tokens"] - prior_usage["total_tokens"],
+    }
+    logger.info(f"[execute_graph] Token usage (this turn) — prompt: {token_usage['prompt_tokens']}, completion: {token_usage['completion_tokens']}, total: {token_usage['total_tokens']}")
+    return {**result, "thread_id": thread_id, "token_usage": token_usage}

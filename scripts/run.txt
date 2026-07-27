@@ -26,7 +26,7 @@ docker buildx create --name multiarch-builder --use --bootstrap
 # 3. Build & push with buildx (single platform)
 # ──────────────────────────────────────────────
 
-docker buildx build --platform linux/amd64 --provenance=false --sbom=false -t 036230294143.dkr.ecr.ap-south-1.amazonaws.com/rag-ingestion-service:v1 --push .
+docker buildx build --platform linux/amd64 --provenance=false --sbom=false -t 036230294143.dkr.ecr.ap-south-1.amazonaws.com/rag-chat-service:v1 --push .
 
 # ──────────────────────────────────────────────
 # 4. Build & push multi-platform (amd64 + arm64)

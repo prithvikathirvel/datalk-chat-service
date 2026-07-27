@@ -7,6 +7,7 @@ class ChatRequest(BaseModel):
     model: Optional[str] = None
     thread_id: Optional[str] = None
     user_id: Optional[str] = None
+    auth_header: Optional[str] = None 
     @field_validator('message')
     @classmethod
     def validate(cls, value):

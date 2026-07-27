@@ -8,6 +8,7 @@ from app.core.config import config
 from app.core.logging import logger, logging_middleware
 from app.langraph.graph import build_graph
 from langgraph_checkpoint_aws import DynamoDBSaver
+from app.service.database import Database
 
 connection_kwargs = {
     "autocommit": True,
@@ -34,11 +35,21 @@ async def lifespan(app: FastAPI):
         # checkpointer = AsyncPostgresSaver(pool)
         # await checkpointer.setup()
 
-        checkpointer = DynamoDBSaver(table_name="langgraph-checkpoints",ttl_seconds=86400 * 7, region_name="ap-south-1",s3_offload_config={"bucket_name": "datalk-langgraph-checkpoints"})
+        database = Database(
+            dialect=config.DIALECT,
+            host=config.DATABASE_HOST,
+            port=config.DATABASE_PORT,
+            user=config.DATABASE_USER,
+            password=config.DATABASE_PASSWORD,
+            database=config.DATABASE_NAME,
+            driver="asyncpg",
+        )
+        app.state.database = database
 
+        checkpointer = DynamoDBSaver(table_name="langgraph-checkpoints",ttl_seconds=86400 * 7, region_name="ap-south-1",s3_offload_config={"bucket_name": "datalk-langgraph-checkpoints"})
         app.state.checkpointer = checkpointer
         app.state.graph = await build_graph(checkpointer)
-        logger.info("Graph compiled and checkpointer ready")
+        logger.info(f"Graph compiled and checkpointer ready | checkpointer={checkpointer.__class__.__name__!r}")
 
         yield
 

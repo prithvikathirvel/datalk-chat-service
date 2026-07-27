@@ -3,7 +3,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import SystemMessage
 from app.langraph.constants.prompts import GENERAL_CHAT_PROMPT
 from app.core.logging import logger
-from app.langraph.utils.helper import get_last_human_message, trim_messages
+from app.langraph.utils.helper import get_last_human_message, trim_messages, extract_token_usage
 
 async def general_chat(agent_state: AgentState, config: RunnableConfig):
     logger.info("[general_chat] Node entered")
@@ -21,7 +21,11 @@ async def general_chat(agent_state: AgentState, config: RunnableConfig):
         logger.info(f"[general_chat] Invoking LLM with {len(trimmed)} history messages")
         response = await llm_service.ainvoke(llm_runnable, final_messages)
         logger.info(f"[general_chat] Response length: {len(response.content)} chars")
-        return {"messages": [response], "final_response": response.content}
+        return {
+            "messages": [response],
+            "final_response": response.content,
+            "token_usage": extract_token_usage(response),
+        }
     except Exception as e:
         logger.error(f"[general_chat] Error: {e}")
         return {"messages": [], "final_response": "I'm sorry, I encountered an error processing your request. Please try again."}
