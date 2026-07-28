@@ -58,9 +58,9 @@ def _is_origin_allowed(allowed_origins: list[str], request_origin: Optional[str]
     if "*" in allowed_origins:
         return True
     if not request_origin:
-        # Origins are configured but the caller didn't send one (e.g. server
-        # to server call, curl, same-origin navigation) — reject to be safe.
-        return False
+        # No origin header — direct/server-to-server call or non-CORS browser
+        # navigation. CORS headers handle browser-level enforcement; allow here.
+        return True
 
     req_scheme, req_host = _extract_origin_host(request_origin)
 
@@ -122,8 +122,9 @@ async def validate_api_key(
     if not row.get("is_active"):
         raise HTTPException(status_code=403, detail="This chatbot is currently disabled")
 
-    allowed_origins = row.get("allowed_origins") or []
+    allowed_origins = [o for o in (row.get("allowed_origins") or []) if o and o.strip()]
     request_origin = request.headers.get("origin") or request.headers.get("referer")
+    logger.info("[validate_api_key] request_origin=%r allowed_origins=%r", request_origin, allowed_origins)
     if not _is_origin_allowed(allowed_origins, request_origin):
         logger.warning(
             f"[validate_api_key] Origin {request_origin!r} not in allowed_origins for config {row.get('id')!r}"

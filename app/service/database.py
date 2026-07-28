@@ -70,6 +70,7 @@ class Database:
                 if result.returns_rows:
                     rows = result.mappings().all()
                     results = [{key: _serialize(value) for key, value in row.items()} for row in rows]
+                    await connection.commit()
                     return results
                 
                 await connection.commit()

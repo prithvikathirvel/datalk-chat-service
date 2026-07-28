@@ -12,7 +12,8 @@ from datetime import datetime
 from typing import List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic.alias_generators import to_camel
 
 LauncherStyle = Literal["circle", "rounded", "square"]
 FeedbackReason = Literal["not_helpful", "needs_human", "gap_detected"]
@@ -20,6 +21,8 @@ FeedbackReason = Literal["not_helpful", "needs_human", "gap_detected"]
 
 class EmbedConfigBase(BaseModel):
     """Fields that make up a chatbot's embed configuration."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     bot_name: str = Field(..., min_length=1, max_length=200)
     bot_description: Optional[str] = None
@@ -60,6 +63,8 @@ class EmbedConfigUpdate(BaseModel):
     Every field is optional — only the supplied fields are updated, existing
     values are preserved for anything omitted.
     """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     bot_name: Optional[str] = None
     bot_description: Optional[str] = None

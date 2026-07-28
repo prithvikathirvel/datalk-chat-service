@@ -4,6 +4,7 @@ from psycopg_pool import AsyncConnectionPool
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 from app.api.v1.api import router
+from app.api.v1.widget import widget_router
 from app.core.config import config
 from app.core.embed_cors import add_embed_cors
 from app.core.logging import logger, logging_middleware
@@ -76,6 +77,6 @@ app = FastAPI(
 )
 logging_middleware(app)
 add_embed_cors(app)
+app.include_router(widget_router)
 app.include_router(router, prefix=config.VERSION_PREFIX)
-
 # handler = Mangum(app)
