@@ -81,6 +81,7 @@ async def embed_chat(
             source_document_ids=source_document_ids or None,
             bot_name=config.get("bot_name"),
             bot_description=config.get("bot_description"),
+            context_prompt=config.get("context_prompt"),
             fallback_message=config.get("fallback_message"),
             page_url=payload.page_url,
             visitor_email=str(payload.visitor_email) if payload.visitor_email else None,
@@ -94,11 +95,18 @@ async def embed_chat(
             f"source_document_ids={source_document_ids!r} response_time_ms={response_time_ms}"
         )
 
+        final_response = result.get("final_response", "")
+        response_type = "rag" if result.get("relevance") == "relevant" else "general"
         return {
             "thread_id": result.get("thread_id", ""),
-            "final_response": result.get("final_response", ""),
-            "response_type": "rag" if result.get("relevance") == "relevant" else "general",
+            "final_response": final_response,
+            "answer": final_response,
+            "response_type": response_type,
             "source_documents": result.get("source_documents", []),
+            "metadata": {
+                "is_answered": response_type == "general" or bool(result.get("retrieved_texts")),
+                "retrieval_response_time_ms": result.get("retrieval_response_time_ms", 0.0),
+            },
         }
     except Exception as e:
         logger.error(f"[embed_chat] Error: {e}")

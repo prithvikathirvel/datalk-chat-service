@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import TypedDict, Literal, List, Annotated, Dict
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
@@ -26,15 +26,6 @@ class AgentState(TypedDict):
     document_ids: List[str]
     token_usage: Annotated[Dict[str, int], _add_token_usage]
     retrieval_response_time_ms: float
-
-
-class QueryPlanOutput(BaseModel):
-    standalone_query: str = Field(
-        description="Self-contained latest user request preserving every entity, constraint, and sub-question."
-    )
-    relevance: Literal["relevant", "irrelevant"] = Field(
-        description="relevant when retrieval/customer knowledge is needed; otherwise irrelevant."
-    )
 
 
 class RelevanceCheckOutput(BaseModel):

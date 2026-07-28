@@ -64,6 +64,7 @@ async def execute_graph(query: ChatRequest, graph: CompiledStateGraph):
             "chatbot_config": {
                 "bot_name": query.bot_name,
                 "bot_description": query.bot_description,
+                "context_prompt": query.context_prompt,
                 "fallback_message": query.fallback_message,
                 "page_url": query.page_url,
                 "visitor_email": query.visitor_email,

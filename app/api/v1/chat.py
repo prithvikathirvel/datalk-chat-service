@@ -60,7 +60,21 @@ async def chat(request:Request,query:ChatRequest, graph = Depends(get_graph),db 
             metadata = json.dumps({})
         )
         # print(result)
-        final_result = {"thread_id": result.get("thread_id", ""), "final_response": result.get("final_response", ""), "response_type": response_type,"result": result.get("result", {}),"document_ids": result.get("document_ids", []),"source_documents": result.get("source_documents", [])}
+        final_response = result.get("final_response", "")
+        final_result = {
+            "thread_id": result.get("thread_id", ""),
+            "final_response": final_response,
+            "answer": final_response,
+            "response_type": response_type,
+            "document_ids": result.get("document_ids", []),
+            "source_documents": result.get("source_documents", []),
+            "metadata": {
+                "is_answered": answered,
+                "retrieval_response_time_ms": result.get("retrieval_response_time_ms", 0.0),
+                "usage": result.get("token_usage", {}),
+            },
+            "result": result.get("result", {}),
+        }
         await db.execute_async_query(ADD_CONVERSATION, conversation.model_dump(mode="python"))
         return final_result
    

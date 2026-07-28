@@ -7,6 +7,7 @@ from app.langraph.utils.helper import (
     extract_token_usage,
     get_chatbot_prompt_parts,
     get_last_human_message,
+    message_text,
     trim_messages,
 )
 
@@ -28,10 +29,11 @@ async def general_chat(agent_state: AgentState, config: RunnableConfig):
 
         logger.info(f"[general_chat] Invoking LLM with {len(trimmed)} history messages")
         response = await llm_service.ainvoke(llm_runnable, final_messages)
-        logger.info(f"[general_chat] Response length: {len(response.content)} chars")
+        response_text = message_text(response)
+        logger.info(f"[general_chat] Response length: {len(response_text)} chars")
         return {
             "messages": [response],
-            "final_response": response.content,
+            "final_response": response_text,
             "source_documents": [],
             "retrieved_texts": [],
             "document_ids": [],

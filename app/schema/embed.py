@@ -56,6 +56,8 @@ class EmbedConfigBase(BaseModel):
 class EmbedConfigCreate(EmbedConfigBase):
     """Payload for ``POST /embed/configs``."""
 
+    context_prompt: Optional[str] = None
+
 
 class EmbedConfigUpdate(BaseModel):
     """Payload for ``PUT /embed/configs/{bot_id}``.
@@ -68,6 +70,7 @@ class EmbedConfigUpdate(BaseModel):
 
     bot_name: Optional[str] = None
     bot_description: Optional[str] = None
+    context_prompt: Optional[str] = None
 
     welcome_message: Optional[str] = None
     fallback_message: Optional[str] = None
@@ -95,6 +98,7 @@ class EmbedConfig(EmbedConfigBase):
 
     id: UUID
     user_id: str
+    context_prompt: Optional[str] = None
     source_document_ids: List[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime

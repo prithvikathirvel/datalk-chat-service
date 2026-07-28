@@ -20,6 +20,7 @@ class ChatRequest(BaseModel):
     # embed config + UI page metadata so the graph can answer as the right bot.
     bot_name: Optional[str] = None
     bot_description: Optional[str] = None
+    context_prompt: Optional[str] = None
     fallback_message: Optional[str] = None
     page_url: Optional[str] = None
     visitor_email: Optional[str] = None

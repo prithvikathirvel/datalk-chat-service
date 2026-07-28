@@ -218,7 +218,7 @@ The raw key is only ever returned **once** — at creation time
 
 | Method | Route | Description |
 |---|---|---|
-| `POST` | `/embed/configs` | Create a chatbot config. Also generates its first API key. Returns `{ config, api_key: { api_key: "<raw, shown once>", ... } }`. |
+| `POST` | `/embed/configs` | Create a chatbot config. Also generates its first API key. Optional private `context_prompt` (`contextPrompt` in camelCase UI payloads) gives LangGraph customer/business context. Returns `{ config, api_key: { api_key: "<raw, shown once>", ... } }`. |
 | `GET` | `/embed/configs` | List all configs owned by the authenticated user. |
 | `GET` | `/embed/configs/{bot_id}` | Get a single owned config. |
 | `PUT` | `/embed/configs/{bot_id}` | Partial update. Omitted fields are left unchanged. Does **not** rotate the API key. |
@@ -233,7 +233,7 @@ Authenticate with either the `X-Api-Key` header, or `?apiKey=` query param
 
 | Method | Route | Description |
 |---|---|---|
-| `GET` | `/embed/config` | Fetch the sanitized public config for the widget (no `user_id` or other internal fields). |
+| `GET` | `/embed/config` | Fetch the sanitized public config for the widget (no `user_id`, `context_prompt`, or other internal fields). |
 | `POST` | `/embed/chat` | Send a chat message from the widget. Proxies to the same LangGraph pipeline as `/message`, scoped to the chatbot's API key. |
 | `POST` | `/embed/feedback` | Submit widget feedback (`reason` one of `not_helpful`, `needs_human`, `gap_detected`). |
 | `GET` | `/embed/script` | Bootstrap payload (`{ config, endpoints }`) for the embeddable `<script>` loader. |
@@ -311,6 +311,8 @@ This applies, in order:
   `api_keys`, and `embed_feedback`.
 - `app/sql/migrations/0002_embed_config_sources.sql` — creates
   `embed_config_sources` for per-chatbot RAG scoping.
+- `app/sql/migrations/0003_embed_context_prompt.sql` — adds private
+  `context_prompt` config used server-side by LangGraph.
 
-Both are idempotent (`CREATE TABLE IF NOT EXISTS`).
+Migrations are idempotent (`CREATE TABLE IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS`).
 

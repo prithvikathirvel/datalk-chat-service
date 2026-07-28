@@ -55,9 +55,9 @@ async def fetch_data(agent_state: AgentState, config: RunnableConfig):
         allowed_doc_ids = set(source_document_ids) if source_document_ids else None
 
         for res in results:
-            meta = res.get("metadata", {})
-            text = (meta.get("text") or "").strip()
-            doc_id = meta.get("document_id", "")
+            meta = res.get("metadata") or {}
+            text = (meta.get("text") or res.get("text") or res.get("content") or res.get("page_content") or "").strip()
+            doc_id = meta.get("document_id") or res.get("document_id") or meta.get("doc_id") or res.get("doc_id") or ""
 
             if allowed_doc_ids is not None and doc_id not in allowed_doc_ids:
                 continue

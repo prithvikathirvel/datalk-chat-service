@@ -4,7 +4,7 @@ from app.core.logging import logger
 from app.langraph.schema import AgentState
 from langchain_core.messages import SystemMessage, AIMessage
 from app.langraph.constants.prompts import RAG_RESPONSE_PROMPT
-from app.langraph.utils.helper import extract_token_usage, get_chatbot_prompt_parts, trim_messages
+from app.langraph.utils.helper import extract_token_usage, get_chatbot_prompt_parts, message_text, trim_messages
 
 
 async def rag_response(agent_state: AgentState, config: RunnableConfig):
@@ -45,11 +45,12 @@ async def rag_response(agent_state: AgentState, config: RunnableConfig):
 
         logger.info(f"[rag_response] Invoking LLM with {len(trimmed)} history messages")
         response = await llm_service.ainvoke(llm_runnable, final_messages)
-        logger.info(f"[rag_response] Response length: {len(response.content)} chars")
+        response_text = message_text(response)
+        logger.info(f"[rag_response] Response length: {len(response_text)} chars")
 
         return {
-            "messages": [AIMessage(content=response.content)],
-            "final_response": response.content,
+            "messages": [AIMessage(content=response_text)],
+            "final_response": response_text,
             "source_documents": source_documents,
             "token_usage": extract_token_usage(response),
         }

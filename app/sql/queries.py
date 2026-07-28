@@ -13,7 +13,7 @@ GET_CONVERSATION_BY_THREAD_ID = """
 
 INSERT_EMBED_CONFIG = """
     INSERT INTO embed_configs (
-        id, user_id, bot_name, bot_description,
+        id, user_id, bot_name, bot_description, context_prompt,
         welcome_message, fallback_message, suggested_questions,
         primary_color, chat_background, position, launcher_label,
         launcher_style, avatar_initials, border_radius_style, widget_shadow,
@@ -21,7 +21,7 @@ INSERT_EMBED_CONFIG = """
         is_active, model
     )
     VALUES (
-        :id, :user_id, :bot_name, :bot_description,
+        :id, :user_id, :bot_name, :bot_description, :context_prompt,
         :welcome_message, :fallback_message, :suggested_questions,
         :primary_color, :chat_background, :position, :launcher_label,
         :launcher_style, :avatar_initials, :border_radius_style, :widget_shadow,
@@ -48,6 +48,7 @@ UPDATE_EMBED_CONFIG = """
     SET
         bot_name = :bot_name,
         bot_description = :bot_description,
+        context_prompt = :context_prompt,
         welcome_message = :welcome_message,
         fallback_message = :fallback_message,
         suggested_questions = :suggested_questions,
