@@ -9,7 +9,7 @@ Covers three DB-backed resources:
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -176,6 +176,7 @@ class EmbedChatRequest(BaseModel):
     thread_id: Optional[str] = None
     visitor_email: Optional[EmailStr] = None
     page_url: Optional[str] = None
+    customer_context: Optional[Dict[str, Any]] = None
 
 
 class EmbedConfigSourceIn(BaseModel):

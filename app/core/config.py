@@ -30,6 +30,11 @@ class Config (BaseSettings):
     GROQ_API_KEY: str
     RAG_SERVICE: str
     RAG_SERVICE_TOKEN: str
+    RAG_TOP_K: int = 6
+    RAG_TOP_K_MULTI_HOP: int = 10
+    RAG_FALLBACK_TOP_K: int = 12
+    RAG_MAX_CONTEXT_CHARS: int = 12000
+    RAG_SERVICE_TIMEOUT_SECONDS: float = 8.0
     S3_BUCKET_NAME: str
     ACCESS_KEY_ID: str
     SECRET_ACCESS_KEY: str

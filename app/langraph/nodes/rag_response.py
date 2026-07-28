@@ -1,9 +1,10 @@
 from langchain_core.runnables import RunnableConfig
+from app.core.config import config as settings
 from app.core.logging import logger
 from app.langraph.schema import AgentState
 from langchain_core.messages import SystemMessage, AIMessage
 from app.langraph.constants.prompts import RAG_RESPONSE_PROMPT
-from app.langraph.utils.helper import trim_messages, extract_token_usage
+from app.langraph.utils.helper import extract_token_usage, get_chatbot_prompt_parts, trim_messages
 
 
 async def rag_response(agent_state: AgentState, config: RunnableConfig):
@@ -13,16 +14,33 @@ async def rag_response(agent_state: AgentState, config: RunnableConfig):
         retrieved_texts = agent_state.get("retrieved_texts", [])
         source_documents = agent_state.get("source_documents", [])
         standalone_query = agent_state.get("standalone_query", "")
+        configurable = config.get("configurable", {})
+        parts = get_chatbot_prompt_parts(configurable)
         logger.info(f"[rag_response] Context chunks: {len(retrieved_texts)}, source docs: {len(source_documents)}")
 
-        llm_service = config["configurable"]["llm"]
+        if not retrieved_texts:
+            response_text = parts["fallback_message"]
+            logger.info("[rag_response] No context found — returning configured fallback without LLM call")
+            return {
+                "messages": [AIMessage(content=response_text)],
+                "final_response": response_text,
+                "source_documents": [],
+            }
+
+        llm_service = configurable["llm"]
         llm_runnable = llm_service.get_llm(structured=False)
 
         logger.info(f"[rag_response] Standalone query: {standalone_query!r}")
-        context = "\n\n---\n\n".join(retrieved_texts) if retrieved_texts else "No context retrieved."
+        context = "\n\n---\n\n".join(
+            f"Source {i + 1}:\n{text[:3000]}" for i, text in enumerate(retrieved_texts)
+        )[: settings.RAG_MAX_CONTEXT_CHARS]
 
-        system_prompt = RAG_RESPONSE_PROMPT.format(query=standalone_query, context=context)
-        trimmed = trim_messages(messages, max_messages=10)
+        system_prompt = RAG_RESPONSE_PROMPT.format(
+            query=standalone_query,
+            context=context,
+            **parts,
+        )
+        trimmed = trim_messages(messages, max_messages=10, max_tokens=2500)
         final_messages = [SystemMessage(content=system_prompt)] + trimmed
 
         logger.info(f"[rag_response] Invoking LLM with {len(trimmed)} history messages")
@@ -37,4 +55,7 @@ async def rag_response(agent_state: AgentState, config: RunnableConfig):
         }
     except Exception as e:
         logger.error(f"[rag_response] Error: {e}")
-        return {"messages": [], "final_response": "I'm sorry, I encountered an error generating a response. Please try again."}
+        return {
+            "messages": [],
+            "final_response": "I'm sorry, I encountered an error generating a response. Please try again.",
+        }

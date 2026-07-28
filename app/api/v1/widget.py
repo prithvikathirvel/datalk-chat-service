@@ -79,6 +79,12 @@ async def embed_chat(
             user_id=auth.user_id,
             auth_header=None,
             source_document_ids=source_document_ids or None,
+            bot_name=config.get("bot_name"),
+            bot_description=config.get("bot_description"),
+            fallback_message=config.get("fallback_message"),
+            page_url=payload.page_url,
+            visitor_email=str(payload.visitor_email) if payload.visitor_email else None,
+            customer_context=payload.customer_context,
         )
         result = await execute_graph(query, graph)
 
@@ -91,6 +97,7 @@ async def embed_chat(
         return {
             "thread_id": result.get("thread_id", ""),
             "final_response": result.get("final_response", ""),
+            "response_type": "rag" if result.get("relevance") == "relevant" else "general",
             "source_documents": result.get("source_documents", []),
         }
     except Exception as e:

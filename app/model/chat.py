@@ -1,6 +1,7 @@
 from pydantic import BaseModel, field_validator
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 import re
+
 
 class ChatRequest(BaseModel):
     message: str
@@ -15,7 +16,16 @@ class ChatRequest(BaseModel):
     `embed_config_sources` — never trust a client-supplied value here for
     the authenticated `/message` endpoint."""
 
-    @field_validator('message')
+    # Optional chatbot/runtime context. Widget endpoints populate these from
+    # embed config + UI page metadata so the graph can answer as the right bot.
+    bot_name: Optional[str] = None
+    bot_description: Optional[str] = None
+    fallback_message: Optional[str] = None
+    page_url: Optional[str] = None
+    visitor_email: Optional[str] = None
+    customer_context: Optional[Dict[str, Any]] = None
+
+    @field_validator("message")
     @classmethod
     def validate(cls, value):
         if re.search(r"<script.*?>.*?</script>", value, re.IGNORECASE | re.DOTALL):
@@ -23,7 +33,3 @@ class ChatRequest(BaseModel):
         if "\0" in value:
             raise ValueError("Content contains null bytes")
         return value
-
-    
-
-    

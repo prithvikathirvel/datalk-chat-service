@@ -31,6 +31,8 @@ async def chat(request:Request,query:ChatRequest, graph = Depends(get_graph),db 
 
         response_time_ms = round((time.perf_counter() - start) * 1000, 2)
         conversation_id = uuid.uuid4()
+        response_type = "rag" if result.get("relevance") == "relevant" else "general"
+        answered = response_type == "general" or bool(result.get("retrieved_texts"))
         conversation = Conversation(
             id = conversation_id,
             thread_id=result.get("thread_id", ""),
@@ -39,7 +41,7 @@ async def chat(request:Request,query:ChatRequest, graph = Depends(get_graph),db 
             chatbot_name = "",
             user_message = query.message,
             bot_message = result.get("final_response", ""),
-            response_type = "rag",
+            response_type = response_type,
             model = result.get("model", config.DEFAULT_LLM_MODEL),
             provider = "provider",
             response_time_ms = int(response_time_ms),
@@ -50,15 +52,15 @@ async def chat(request:Request,query:ChatRequest, graph = Depends(get_graph),db 
             documents_retrieved = len(result.get("source_documents", [])),
             chunks_retrieved = len(result.get("retrieved_texts", [])),
             confidence_score = 0.0,
-            is_answered = True,
-            answer_status = "answered",
+            is_answered = answered,
+            answer_status = "answered" if answered else "not_found",
             feedback =0,
             feedback_comment = "",
             error_message = "",
             metadata = json.dumps({})
         )
         # print(result)
-        final_result = {"thread_id": result.get("thread_id", ""), "final_response": result.get("final_response", ""),"result": result.get("result", {}),"document_ids": result.get("document_ids", []),"source_documents": result.get("source_documents", [])}
+        final_result = {"thread_id": result.get("thread_id", ""), "final_response": result.get("final_response", ""), "response_type": response_type,"result": result.get("result", {}),"document_ids": result.get("document_ids", []),"source_documents": result.get("source_documents", [])}
         await db.execute_async_query(ADD_CONVERSATION, conversation.model_dump(mode="python"))
         return final_result
    
