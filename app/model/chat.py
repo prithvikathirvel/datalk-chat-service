@@ -1,9 +1,12 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic.alias_generators import to_camel
 from typing import Any, Dict, List, Optional
 import re
 
 
 class ChatRequest(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
     message: str
     model: Optional[str] = None
     thread_id: Optional[str] = None

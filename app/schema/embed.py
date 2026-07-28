@@ -176,6 +176,8 @@ class EmbedFeedbackOut(BaseModel):
 class EmbedChatRequest(BaseModel):
     """Payload for the public, API-key-authenticated ``/embed/chat`` route."""
 
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
     message: str = Field(..., min_length=1)
     thread_id: Optional[str] = None
     visitor_email: Optional[EmailStr] = None
