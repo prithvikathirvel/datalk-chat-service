@@ -298,6 +298,17 @@ doesn't need to know which documents back its answers.
    `source_document_ids`, so it continues to search the full corpus exactly
    as before.
 
+### Analytics storage for top questions
+
+Every successful `/message` and `/widget/chat` call now writes one row to
+`conversation` and updates `conversation_question_stats` in the same SQL
+statement. `conversation_question_stats` uses `pg_trgm` to merge near-duplicate
+questions at write time, so the analytics API can fetch `topQuestions` with a
+simple indexed query instead of grouping the full conversation table.
+
+Useful query constant: `GET_TOP_QUESTIONS` in `app/sql/queries.py`.
+Filter by `user_id` and optionally `chatbot_id`, then order by `count`.
+
 ### Migrations
 
 Run once against the configured Postgres database:
@@ -313,6 +324,9 @@ This applies, in order:
   `embed_config_sources` for per-chatbot RAG scoping.
 - `app/sql/migrations/0003_embed_context_prompt.sql` — adds private
   `context_prompt` config used server-side by LangGraph.
+- `app/sql/migrations/0004_conversation_question_stats.sql` — enables
+  `pg_trgm`, stores top-question aggregates in `conversation_question_stats`,
+  and adds missing conversation analytics columns if needed.
 
 Migrations are idempotent (`CREATE TABLE IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS`).
 

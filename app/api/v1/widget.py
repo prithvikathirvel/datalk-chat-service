@@ -11,6 +11,7 @@ from app.core.embed_auth import ValidatedEmbedAuth, validate_api_key
 from app.core.logging import logger
 from app.langraph.graph import execute_graph
 from app.model.chat import ChatRequest
+from app.service.conversation_service import save_conversation_turn
 from app.schema.embed import (
     EmbedChatRequest,
     EmbedConfigPublic,
@@ -95,16 +96,33 @@ async def embed_chat(
             f"source_document_ids={source_document_ids!r} response_time_ms={response_time_ms}"
         )
 
+        saved = await save_conversation_turn(
+            db,
+            query,
+            result,
+            response_time_ms,
+            chatbot_id=str(config.get("id")) if config.get("id") else None,
+            chatbot_name=config.get("bot_name") or "",
+            channel="widget",
+            metadata={
+                "page_url": payload.page_url,
+                "visitor_email": str(payload.visitor_email) if payload.visitor_email else None,
+                "parent_origin": request.headers.get("origin"),
+                "source_document_ids": source_document_ids,
+            },
+        )
+
         final_response = result.get("final_response", "")
-        response_type = "rag" if result.get("relevance") == "relevant" else "general"
         return {
             "thread_id": result.get("thread_id", ""),
             "final_response": final_response,
             "answer": final_response,
-            "response_type": response_type,
+            "response_type": saved["response_type"],
             "source_documents": result.get("source_documents", []),
             "metadata": {
-                "is_answered": response_type == "general" or bool(result.get("retrieved_texts")),
+                "conversation_id": saved["conversation_id"],
+                "is_answered": saved["is_answered"],
+                "answer_status": saved["answer_status"],
                 "retrieval_response_time_ms": result.get("retrieval_response_time_ms", 0.0),
             },
         }

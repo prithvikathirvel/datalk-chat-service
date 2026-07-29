@@ -1,6 +1,70 @@
 ADD_CONVERSATION = """
-   INSERT INTO conversation ( id, thread_id, user_id, chatbot_id, chatbot_name, user_message, bot_message, response_type, model, provider, response_time_ms, prompt_tokens, completion_tokens, total_tokens, retrieval_response_time_ms, documents_retrieved, chunks_retrieved, confidence_score, is_answered, answer_status, feedback, feedback_comment, error_message, metadata)
-   VALUES (:id, :thread_id, :user_id, :chatbot_id, :chatbot_name, :user_message, :bot_message, :response_type, :model, :provider, :response_time_ms, :prompt_tokens, :completion_tokens, :total_tokens, :retrieval_response_time_ms, :documents_retrieved, :chunks_retrieved, :confidence_score, :is_answered, :answer_status, :feedback, :feedback_comment, :error_message, :metadata)
+   INSERT INTO conversation ( id, thread_id, user_id, chatbot_id, chatbot_name, user_message, rewritten_query, bot_message, response_type, final_node, model, provider, response_time_ms, prompt_tokens, completion_tokens, total_tokens, retrieval_response_time_ms, documents_retrieved, chunks_retrieved, confidence_score, is_answered, answer_status, feedback, feedback_comment, error_message, metadata)
+   VALUES (:id, :thread_id, :user_id, :chatbot_id, :chatbot_name, :user_message, :rewritten_query, :bot_message, :response_type, :final_node, :model, :provider, :response_time_ms, :prompt_tokens, :completion_tokens, :total_tokens, :retrieval_response_time_ms, :documents_retrieved, :chunks_retrieved, :confidence_score, :is_answered, :answer_status, :feedback, :feedback_comment, :error_message, :metadata)
+"""
+
+ADD_CONVERSATION_WITH_QUESTION_STATS = """
+WITH inserted_conversation AS (
+   INSERT INTO conversation (
+      id, thread_id, user_id, chatbot_id, chatbot_name, user_message,
+      rewritten_query, bot_message, response_type, final_node, model, provider,
+      response_time_ms, prompt_tokens, completion_tokens, total_tokens,
+      retrieval_response_time_ms, documents_retrieved, chunks_retrieved,
+      confidence_score, is_answered, answer_status, feedback, feedback_comment,
+      error_message, metadata
+   )
+   VALUES (
+      :id, :thread_id, :user_id, :chatbot_id, :chatbot_name, :user_message,
+      :rewritten_query, :bot_message, :response_type, :final_node, :model, :provider,
+      :response_time_ms, :prompt_tokens, :completion_tokens, :total_tokens,
+      :retrieval_response_time_ms, :documents_retrieved, :chunks_retrieved,
+      :confidence_score, :is_answered, :answer_status, :feedback, :feedback_comment,
+      :error_message, :metadata
+   )
+   RETURNING id
+), candidate AS (
+   SELECT id
+   FROM conversation_question_stats
+   WHERE user_id = :user_id
+     AND chatbot_id IS NOT DISTINCT FROM :chatbot_id
+     AND normalized_question % :normalized_question
+     AND similarity(normalized_question, :normalized_question) >= :question_similarity_threshold
+   ORDER BY similarity(normalized_question, :normalized_question) DESC, count DESC, last_asked DESC
+   LIMIT 1
+), updated_stat AS (
+   UPDATE conversation_question_stats s
+   SET count = s.count + 1,
+       unanswered_count = s.unanswered_count + CASE WHEN :is_answered THEN 0 ELSE 1 END,
+       chatbot_name = COALESCE(:chatbot_name, s.chatbot_name),
+       last_conversation_id = (SELECT id FROM inserted_conversation),
+       last_asked = NOW(),
+       updated_at = NOW()
+   WHERE s.id = (SELECT id FROM candidate)
+   RETURNING s.id
+), inserted_stat AS (
+   INSERT INTO conversation_question_stats (
+      id, user_id, chatbot_id, chatbot_name, question, normalized_question,
+      count, unanswered_count, first_conversation_id, last_conversation_id,
+      first_asked, last_asked
+   )
+   SELECT
+      gen_random_uuid(), :user_id, :chatbot_id, :chatbot_name, :analytics_question,
+      :normalized_question, 1, CASE WHEN :is_answered THEN 0 ELSE 1 END,
+      (SELECT id FROM inserted_conversation), (SELECT id FROM inserted_conversation),
+      NOW(), NOW()
+   WHERE NOT EXISTS (SELECT 1 FROM updated_stat)
+   RETURNING id
+)
+SELECT id FROM inserted_conversation
+"""
+
+GET_TOP_QUESTIONS = """
+   SELECT id::text AS id, question, count, last_asked AS "lastAsked"
+   FROM conversation_question_stats
+   WHERE user_id = :user_id
+     AND (:chatbot_id IS NULL OR chatbot_id = :chatbot_id)
+   ORDER BY count DESC, last_asked DESC
+   LIMIT :limit
 """
 
 GET_CONVERSATION_BY_THREAD_ID = """

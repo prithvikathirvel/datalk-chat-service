@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 class Conversation(BaseModel):
     id: UUID = Field(...,description="Unique identifier for the conversation record.")
 
-    thread_id: UUID = Field(...,description="Unique identifier for the conversation thread.")
+    thread_id: str = Field(...,description="Unique identifier for the conversation thread.")
 
     user_id: str = Field(...,description="Authenticated user's unique identifier.")
 

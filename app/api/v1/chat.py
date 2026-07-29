@@ -1,85 +1,63 @@
-import uuid
-import json
-from fastapi import APIRouter, Depends,HTTPException, Request
-from app.api.v1.deps import get_graph,get_db
-from app.core.config import config
-from app.model.chat import ChatRequest
+import datetime
+import time
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+
+from app.api.v1.deps import get_db, get_graph
 from app.core.middleware import CurrentUser, get_current_user
 from app.langraph.graph import execute_graph
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
-import datetime
-import asyncio
-import time
-from app.schema.model import Conversation
-from app.sql.queries import ADD_CONVERSATION,GET_CONVERSATION_BY_THREAD_ID
+from app.model.chat import ChatRequest
+from app.service.conversation_service import save_conversation_turn
+from app.sql.queries import GET_CONVERSATION_BY_THREAD_ID
 
 
 chat_router = APIRouter(tags=["chat"])
 
 
-
 @chat_router.post("/message", summary="Chat with your data", description="Chat with your data")
-async def chat(request:Request,query:ChatRequest, graph = Depends(get_graph),db = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-   start = time.perf_counter()
-   try:
-        auth_header = request.headers.get("authorization")
-        user_id = user.sub
-       # query.thread_id = query.thread_id or str(uuid.uuid4())
-        query.user_id = user_id
-        query.auth_header = auth_header
+async def chat(
+    request: Request,
+    query: ChatRequest,
+    graph=Depends(get_graph),
+    db=Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    start = time.perf_counter()
+    try:
+        query.user_id = user.sub
+        query.auth_header = request.headers.get("authorization")
         result = await execute_graph(query, graph)
 
         response_time_ms = round((time.perf_counter() - start) * 1000, 2)
-        conversation_id = uuid.uuid4()
-        response_type = "rag" if result.get("relevance") == "relevant" else "general"
-        answered = response_type == "general" or bool(result.get("retrieved_texts"))
-        conversation = Conversation(
-            id = conversation_id,
-            thread_id=result.get("thread_id", ""),
-            user_id=query.user_id,
-            chatbot_id = uuid.uuid4(),
-            chatbot_name = "",
-            user_message = query.message,
-            bot_message = result.get("final_response", ""),
-            response_type = response_type,
-            model = result.get("model", config.DEFAULT_LLM_MODEL),
-            provider = "provider",
-            response_time_ms = int(response_time_ms),
-            prompt_tokens = int(result.get("token_usage", {}).get("prompt_tokens", 0)),
-            completion_tokens = int(result.get("token_usage", {}).get("completion_tokens", 0)),
-            total_tokens = int(result.get("token_usage", {}).get("total_tokens", 0)),
-            retrieval_response_time_ms = result.get("retrieval_response_time_ms", 0.0),
-            documents_retrieved = len(result.get("source_documents", [])),
-            chunks_retrieved = len(result.get("retrieved_texts", [])),
-            confidence_score = 0.0,
-            is_answered = answered,
-            answer_status = "answered" if answered else "not_found",
-            feedback =0,
-            feedback_comment = "",
-            error_message = "",
-            metadata = json.dumps({})
+        saved = await save_conversation_turn(
+            db,
+            query,
+            result,
+            response_time_ms,
+            chatbot_id=None,
+            chatbot_name=query.bot_name or "",
+            channel="app",
         )
-        # print(result)
+
         final_response = result.get("final_response", "")
-        final_result = {
+        return {
             "thread_id": result.get("thread_id", ""),
             "final_response": final_response,
             "answer": final_response,
-            "response_type": response_type,
+            "response_type": saved["response_type"],
             "document_ids": result.get("document_ids", []),
             "source_documents": result.get("source_documents", []),
             "metadata": {
-                "is_answered": answered,
+                "conversation_id": saved["conversation_id"],
+                "is_answered": saved["is_answered"],
+                "answer_status": saved["answer_status"],
                 "retrieval_response_time_ms": result.get("retrieval_response_time_ms", 0.0),
                 "usage": result.get("token_usage", {}),
             },
-            "result": result.get("result", {}),
         }
-        await db.execute_async_query(ADD_CONVERSATION, conversation.model_dump(mode="python"))
-        return final_result
-   
-   except Exception as e:
-       raise HTTPException(status_code=500, detail=f"Error processing chat request: {str(e)}")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing chat request: {str(e)}")
 
 
 @chat_router.get(
@@ -167,10 +145,8 @@ async def get_conversation(thread_id: str, db=Depends(get_db)):
         )
 
 
-
-
 @chat_router.get("/conversations", summary="Get conversations", description="Returns all conversations for the user.",)
-async def get_conversations(db = Depends(get_db),user = Depends(get_current_user)):
+async def get_conversations(db=Depends(get_db), user=Depends(get_current_user)):
 
     try:
         user_id = user.sub
@@ -188,4 +164,3 @@ async def get_conversations(db = Depends(get_db),user = Depends(get_current_user
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching conversations: {str(e)}")
-    

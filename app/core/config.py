@@ -35,6 +35,7 @@ class Config (BaseSettings):
     RAG_FALLBACK_TOP_K: int = 12
     RAG_MAX_CONTEXT_CHARS: int = 12000
     RAG_SERVICE_TIMEOUT_SECONDS: float = 8.0
+    QUESTION_SIMILARITY_THRESHOLD: float = 0.68
     S3_BUCKET_NAME: str
     ACCESS_KEY_ID: str
     SECRET_ACCESS_KEY: str
